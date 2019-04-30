@@ -48,8 +48,8 @@ class NewObjectWindowHandler:
         dialog = self.builder.get_object("dialog_object")
         dialog.destroy()
 
-    def onOk(self, widget):
-        window = self.builder.get_object("dialog_object")
+    def onOK(self, widget):
+        window = self.builder.get_object("dialog_window")
         notebook = self.builder.get_object("notebook1")
 
         page_number = notebook.get_current_page()

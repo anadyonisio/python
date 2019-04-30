@@ -22,7 +22,6 @@ class Vetor2D(np.ndarray):
     def y(self) -> float:
         return self[1]
 
-
 @dataclass
 class Rectangle:
     min: Vetor2D
@@ -187,7 +186,6 @@ class Point(GraphicObject):
     def normalize(self, window: Window):
         self.normalized = self.posicao
 
-
 class Line(GraphicObject):
     def __init__(self, inicio: Vetor2D, fim: Vetor2D, name=''):
         super().__init__(name)
@@ -258,4 +256,3 @@ class Polygon(GraphicObject):
 
     def normalize(self, window: Window):
         self.normalized = self.vertices
-
