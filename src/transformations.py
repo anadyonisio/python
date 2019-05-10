@@ -15,7 +15,7 @@ def rotation_matrix(angle: float) -> np.ndarray:
 def translate_matrix(dx: float, dy: float) -> np.ndarray:
     return np.array(
         [
-            1.0,  1.0,  0.0,
+            1.0,  0.0,  0.0,
             0.0,  1.0,  0.0,
             dx,   dy,   1.0
         ],

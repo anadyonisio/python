@@ -36,7 +36,7 @@ def entry_text(handler, entry_id: str) -> str:
 class RotationRef(Enum):
     CENTER = auto()
     ORIGIN = auto()
-    ABSOLUTE = auto()
+    ARBITRARY = auto()
 
 class NewObjectWindowHandler:
     def __init__(self, dialog, builder):
@@ -85,6 +85,7 @@ class NewObjectWindowHandler:
         self.vertices.append(Vetor2D(x, y))
 
         print("Ponto Adicionado")
+        print(f'Ponto Adicionado: {x}, {y}')
 
 class NewObjectWindow(Gtk.Dialog):
     def __init__(self, *args, **kwargs):
@@ -131,8 +132,8 @@ class MainWindowHandler:
         if self.world_win is None:
             self.size = (widget.get_allocated_width(), widget.get_allocated_height())
             self.world_win = Window(
-                Vetor2D(-self.size[0]/2,- self.size[1]/2),
-                Vetor2D(self.size[0]/2, self.size[1])/2,
+                Vetor2D(-self.size[0]/2,-self.size[1]/2),
+                Vetor2D(self.size[0]/2, self.size[1]/2),
             )
 
         def win_to_vp(v: Vetor2D):
@@ -147,7 +148,7 @@ class MainWindowHandler:
         viewport = self.viewport()
         cr.set_line_width(1.0)
         cr.paint()
-        cr.set_source_rgb(0, 0, 0)
+        cr.set_source_rgb(0, 0, 100)
 
         for object in self.display_file:
             if object:
@@ -168,9 +169,9 @@ class MainWindowHandler:
 
 
     def add_object(self, object: GraphicObject):
-        # window = self.world_win or Rectangle(Vetor2D(-1, -1), Vetor2D(1, 1))
-        #
-        # object.normalize(window)
+        window = self.world_win or Rectangle(Vetor2D(-1, -1), Vetor2D(1, 1))
+
+        object.normalize(window)
         self.display_file.append(object)
         self.object_store.append([object.name,
            str(f'{type(object).__name__}')])
@@ -203,6 +204,7 @@ class MainWindowHandler:
         }
 
         op, *args = TRANSFORMATIONS[widget.get_name()]
+        print(f'args: {args}')
 
         for object in self.selected_objs():
             if op == 'translate':
@@ -217,16 +219,16 @@ class MainWindowHandler:
             # Not working
             elif op == 'rotate':
                 try:
-                    abs_x = int(entry_text(self, 'rot_x'))
-                    abs_y = int(entry_text(self, 'rot_y'))
+                    arb_x = int(entry_text(self, 'rot_x'))
+                    arb_y = int(entry_text(self, 'rot_y'))
                 except ValueError:
-                    abs_x = 0
-                    abs_y = 0
+                    arb_x = 0
+                    arb_y = 0
 
                 ref = {
                     RotationRef.CENTER: object.centroid,
                     RotationRef.ORIGIN: Vetor2D(0, 0),
-                    RotationRef.ABSOLUTE: Vetor2D(float(abs_x), float(abs_y)),
+                    RotationRef.ARBITRARY: Vetor2D(float(arb_x), float(arb_y)),
                 }[self.rotation_ref]
 
                 object.rotate(*args, ref)
@@ -240,34 +242,26 @@ class MainWindowHandler:
 
         return (self.display_file[int(str(index))] for index in rows)
 
+    def on_rotation_ref(self, widget: Gtk.RadioButton):
+        for w in widget.get_group():
+            if w.get_active():
+                self.rotation_ref = {
+                    'rotate-obj-center': RotationRef.CENTER,
+                    'rotate-origin': RotationRef.ORIGIN,
+                    'rotate-arb': RotationRef.ARBITRARY,
+                }[w.get_name()]
+                if w.get_name() == 'rotate-arb':
+                    for _id in 'rot_x', 'rot_y':
+                        self.builder.get_object(_id).set_editable(True)
 
-    ############ Not working
-    def onButtonPress(self, widget, event):
-        if EVENTS[event.button] == 'left':
-            self.press_start = Vetor2D(-event.x, event.y)
-            self.dragging = True
+    def onRotationWindow(self, widget: Gtk.Button):
+        self.world_win.angle += int(entry_text(self, 'rot_window_entry'))
+        self.normalize()
+        self.window.queue_draw()
 
-    def onButtonRelease(self, widget, event):
-        if EVENTS[event.button] == 'left':
-            self.dragging = False
-
-    def onMotion(self, widget, event):
-        def vp_to_win(v: Vetor2D):
-            viewport = self.viewport()
-
-            return Vetor2D(
-                (v.x / viewport.width) * self.world_win.width,
-                (v.y / viewport.height) * self.world_win.height
-            )
-
-        if self.dragging:
-            current = Vetor2D(-event.x, event.y)
-            delta = vp_to_win(current - self.press_start)
-            self.press_start = current
-            self.world_win.min += delta
-            self.world_win.max += delta
-            widget.queue_draw()
-    ###########################
+    def normalize(self):
+        for object in self.display_file:
+            object.normalize(self.world_win)
 
 class AppWindow(Gtk.ApplicationWindow):
     def __init__(self, *args, **kwargs):

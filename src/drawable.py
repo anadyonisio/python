@@ -5,7 +5,8 @@ from abc import ABC, abstractmethod
 from math import cos, sin, radians
 from dataclasses import dataclass
 from cairo import Context
-from transformations import rotation_matrix, translate_matrix
+from typing import List, Optional
+from transformations import rotation_matrix, translate_matrix, scale_matrix
 
 
 
@@ -154,6 +155,9 @@ class GraphicObject(ABC):
         )
         self.transform(t_matrix)
 
+    def clipped(self, window: Window, method=None) -> Optional['GraphicObject']:
+        return self
+
 class Point(GraphicObject):
     def __init__(self, posicao: Vetor2D, name=''):
         super().__init__(name)
@@ -221,6 +225,9 @@ class Line(GraphicObject):
         return (self.inicio + self.fim) / 2
 
     def transform(self, matrix: np.ndarray):
+        print(f'inicio: {self.inicio}')
+        print(f'fim: {self.fim}')
+        print(f'matriz: {matrix}')
         self.inicio = self.inicio @ matrix
         self.fim =  self.fim @ matrix
 
@@ -238,12 +245,14 @@ class Polygon(GraphicObject):
         if not self.normalized:
             return
 
-        for i in range(1, len(self.vertices)):
+        for i in range(0, len(self.vertices)):
             proximo = self.normalized[i]
+            print(f'proximo: {proximo}')
             proximo_vp = transform(Vetor2D(proximo[0], proximo[1]))
-
+            print(f'proximo_vp: {proximo_vp}')
             cr.line_to(proximo_vp.x, proximo_vp.y)
         cr.close_path()
+        cr.stroke()
 
     @property
     def centroid(self):
