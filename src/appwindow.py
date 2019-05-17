@@ -6,7 +6,8 @@ gi.require_foreign("cairo")
 
 from enum import auto, Enum
 from gi.repository import Gtk, Gdk
-from transformations import rotation_matrix
+from transformations import rotation_matrix, viewport_matrix
+from clipping import LineClippingMethod
 from drawable import (
     Point,
     Vetor2D,
@@ -14,8 +15,8 @@ from drawable import (
     GraphicObject,
     Polygon,
     Rectangle,
-    Viewport,
     Window,
+    View
 )
 
 OBJECT_TYPES = {
@@ -53,21 +54,21 @@ class NewObjectWindowHandler:
         notebook = self.builder.get_object("notebook1")
 
         page_number = notebook.get_current_page()
-        name = self.builder.get_object("name_entry").get_text()
+        name = entry_text(self, "name_entry")
 
 
         if OBJECT_TYPES[page_number] == "point":
             print("Ponto")
-            x = float(self.builder.get_object('entry_x').get_text())
-            y = float(self.builder.get_object('entry_y').get_text())
+            x = float(entry_text(self, 'entry_x'))
+            y = float(entry_text(self, 'entry_y'))
             self.dialog.new_object = Point(Vetor2D(x, y), name=name)
 
         elif OBJECT_TYPES[page_number] == "line":
             print("Reta")
-            x1 = float(self.builder.get_object('entry_x1').get_text())
-            y1 = float(self.builder.get_object('entry_y1').get_text())
-            x2 = float(self.builder.get_object('entry_x2').get_text())
-            y2 = float(self.builder.get_object('entry_y2').get_text())
+            x1 = float(entry_text(self, 'entry_x1'))
+            y1 = float(entry_text(self, 'entry_y1'))
+            x2 = float(entry_text(self, 'entry_x2'))
+            y2 = float(entry_text(self, 'entry_y2'))
             self.dialog.new_object = Line(Vetor2D(x1, y1), Vetor2D(x2, y2), name=name)
 
         elif OBJECT_TYPES[page_number] == "polygon":
@@ -80,8 +81,8 @@ class NewObjectWindowHandler:
         window.destroy()
 
     def onAddPoint(self, widget):
-        x = float(self.builder.get_object('entry_x3').get_text())
-        y = float(self.builder.get_object('entry_y3').get_text())
+        x = float(entry_text(self, 'entry_x3'))
+        y = float(entry_text(self, 'entry_y3'))
         self.vertices.append(Vetor2D(x, y))
 
         print("Ponto Adicionado")
@@ -106,54 +107,55 @@ class MainWindowHandler:
         self.builder = builder
         self.window = self.builder.get_object("main_window")
         self.object_store = self.builder.get_object("object_store")
-        self.display_file = []
+        self.view = View()
         self.world_win = None
         self.press_start = None
         self.size = []
         self.rotation_ref = RotationRef.CENTER
+        self.clipping_method = LineClippingMethod.COHEN_SUTHERLAND
 
     def onDestroy(self, *args):
         self.window.get_application().quit()
 
-    def viewport(self) -> drawable.Viewport:
+    def viewport(self) -> Rectangle:
         widget = self.builder.get_object('drawing_area')
-        return drawable.Viewport(
-            region=Rectangle(
-                min=Vetor2D(0, 0),
-                max=Vetor2D(
-                    widget.get_allocated_width(),
-                    widget.get_allocated_height(),
-                ),
-            ).with_margin(10),
-            window=self.world_win,
-        )
+        return Rectangle(
+            min=Vetor2D(0, 0),
+            max=Vetor2D(
+                widget.get_allocated_width(),
+                widget.get_allocated_height(),
+            )
+        ).with_margin(10)
 
     def onDraw(self, widget, cr):
-        if self.world_win is None:
+        if self.view.window is None:
             self.size = (widget.get_allocated_width(), widget.get_allocated_height())
-            self.world_win = Window(
+            self.view.window = Window(
                 Vetor2D(-self.size[0]/2,-self.size[1]/2),
                 Vetor2D(self.size[0]/2, self.size[1]/2),
             )
-
-        def win_to_vp(v: Vetor2D):
-            window = self.world_win
-            vp_min = viewport.region.min
-            width_vp = viewport.width
-            height_vp = viewport.height
-
-            return Vetor2D( vp_min.x +(v.x - window.min.x)/window.width * width_vp,
-                           vp_min.y +(1-((v.y - window.min.y)/window.height)) * height_vp)
+        #
+        # def win_to_vp(v: Vetor2D):
+        #     window = self.world_win
+        #     vp_min = viewport.region.min
+        #     width_vp = viewport.width
+        #     height_vp = viewport.height
+        #
+        #     return Vetor2D( vp_min.x +(v.x - window.min.x)/window.width * width_vp,
+        #                    vp_min.y +(1-((v.y - window.min.y)/window.height)) * height_vp)
 
         viewport = self.viewport()
+        vp_matrix = viewport_matrix(viewport)
+
         cr.set_line_width(1.0)
         cr.paint()
         cr.set_source_rgb(0, 0, 100)
 
-        for object in self.display_file:
-            if object:
-                object.draw(cr,viewport, win_to_vp)
-        viewport.draw(cr)
+        for object in self.view.obj_list:
+            clipped = object.clipped(method=self.clipping_method)
+            if clipped:
+                clipped.draw(cr, vp_matrix)
+        viewport.draw(cr, vp_matrix)
 
     def onNewObject(self, widget):
         dialog = NewObjectWindow()
@@ -161,35 +163,37 @@ class MainWindowHandler:
 
         if response == Gtk.ResponseType.OK:
             print("The OK button was clicked")
-            self.add_object(dialog.new_object)
-            self.builder.get_object("drawing_area").queue_draw()
-
+            if dialog.new_object is not None:
+                self.view.add_object(dialog.new_object)
+                self.add_object(dialog.new_object)
+                self.builder.get_object("drawing_area").queue_draw()
+            else:
+                print("Objeto Inválido")
         elif response == Gtk.ResponseType.CANCEL:
             print("The Cancel button was clicked")
 
+    # def add_object(self, object: GraphicObject):
+    #     object.update_ndc(self.window)
+    #     self.objs.append(object)
 
     def add_object(self, object: GraphicObject):
-        window = self.world_win or Rectangle(Vetor2D(-1, -1), Vetor2D(1, 1))
-
-        object.normalize(window)
-        self.display_file.append(object)
-        self.object_store.append([object.name,
-           str(f'{type(object).__name__}')])
+        self.object_store.append([object.name, str(f'{type(object).__name__}')])
 
     def onResize(self, widget: Gtk.Widget, allocation: Gdk.Rectangle):
         w_proportion = allocation.width / self.size[0]
         h_proportion = allocation.height / self.size[1]
 
-        self.world_win.max = Vetor2D(
-            self.world_win.max.x * w_proportion,
-            self.world_win.max.y * h_proportion
+        self.view.window.max = Vetor2D(
+            self.view.window.max.x * w_proportion,
+            self.view.window.max.y * h_proportion
         )
-        self.world_win.min = Vetor2D(
-            self.world_win.min.x * w_proportion,
-            self.world_win.min.y * h_proportion
+        self.view.window.min = Vetor2D(
+            self.view.window.min.x * w_proportion,
+            self.view.window.min.y * h_proportion
         )
 
         self.size = (allocation.width, allocation.height)
+        self.view.update_norm_coord()
 
     def navigationButton(self, widget):
         TRANSFORMATIONS = {
@@ -209,14 +213,11 @@ class MainWindowHandler:
         for object in self.selected_objs():
             if op == 'translate':
                 args[0] = (
-                        args[0] @
-                        rotation_matrix(self.world_win.angle)
+                        args[0] @ rotation_matrix(self.view.window.angle)
                 )
                 object.translate(*args)
             elif op == 'scale':
                 object.scale(*args)
-
-            # Not working
             elif op == 'rotate':
                 try:
                     arb_x = int(entry_text(self, 'rot_x'))
@@ -232,7 +233,7 @@ class MainWindowHandler:
                 }[self.rotation_ref]
 
                 object.rotate(*args, ref)
-            object.normalize(self.world_win)
+            object.update_norm_coord(self.view.window)
 
         self.window.queue_draw()
 
@@ -240,7 +241,7 @@ class MainWindowHandler:
         tree = self.builder.get_object('tree_displayfiles')
         store, rows = tree.get_selection().get_selected_rows()
 
-        return (self.display_file[int(str(index))] for index in rows)
+        return (self.view.obj_list[int(str(index))] for index in rows)
 
     def on_rotation_ref(self, widget: Gtk.RadioButton):
         for w in widget.get_group():
@@ -255,13 +256,23 @@ class MainWindowHandler:
                         self.builder.get_object(_id).set_editable(True)
 
     def onRotationWindow(self, widget: Gtk.Button):
-        self.world_win.angle += int(entry_text(self, 'rot_window_entry'))
-        self.normalize()
+        rotation_angle = int(entry_text(self, 'rot_window_entry'))
+        self.view.window.angle += rotation_angle
+        for object in self.view.obj_list:
+            object.update_norm_coord(self.view.window)
         self.window.queue_draw()
 
-    def normalize(self):
-        for object in self.display_file:
-            object.normalize(self.world_win)
+    # def onClippingMethod(self, widget: Gtk.ComboBoxText):
+    #     METHODS = {
+    #         'Cohen Sutherland': LineClippingMethod.COHEN_SUTHERLAND,
+    #         'Liang Barsky': LineClippingMethod.LIANG_BARSKY,
+    #     }
+    #     self.clipping_method = METHODS[widget.get_active_text()]
+    #     self.window.queue_draw()
+    #
+    # def normalize(self):
+    #     for object in self.display_file:
+    #         object.normalize(self.world_win)
 
 class AppWindow(Gtk.ApplicationWindow):
     def __init__(self, *args, **kwargs):

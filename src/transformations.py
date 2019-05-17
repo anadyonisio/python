@@ -32,5 +32,15 @@ def scale_matrix(sx: float, sy: float) -> np.ndarray:
         dtype=float
     ).reshape(3, 3)
 
+def viewport_matrix(viewport: 'Rectangle') -> np.ndarray:
+    return (
+        scale_matrix(viewport.width / 2, -viewport.height / 2)
+        @ translate_matrix(viewport.centroid.x, viewport.centroid.y)
+    )
 
-
+def normalized_matrix(window: 'Window') -> np.ndarray:
+    return (
+        translate_matrix(-window.centroid.x, -window.centroid.y)
+        @ rotation_matrix(-window.angle)
+        @ scale_matrix(2 / window.width, 2 / window.height)
+    )
