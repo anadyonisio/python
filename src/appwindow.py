@@ -74,7 +74,8 @@ class NewObjectWindowHandler:
         elif OBJECT_TYPES[page_number] == "polygon":
             print("Polígono")
             if len(self.vertices) >= 3:
-                 self.dialog.new_object = Polygon(self.vertices, name=name)
+                filled = self.builder.get_object('switch_filled').get_active()
+                self.dialog.new_object = Polygon(self.vertices, name=name, filled=filled )
         else:
             print("Invalid Page")
             raise ValueError('No page with given index.')
@@ -85,14 +86,12 @@ class NewObjectWindowHandler:
         y = float(entry_text(self, 'entry_y3'))
         self.vertices.append(Vetor2D(x, y))
 
-        print("Ponto Adicionado")
         print(f'Ponto Adicionado: {x}, {y}')
+
 
 class NewObjectWindow(Gtk.Dialog):
     def __init__(self, *args, **kwargs):
         super().__init__(self, *args, **kwargs)
-
-        #self.set_default_size(150, 100)
 
         self.builder = Gtk.Builder.new_from_file("../interface/dialog_object.glade")
         self.builder.connect_signals(
@@ -134,15 +133,6 @@ class MainWindowHandler:
                 Vetor2D(-self.size[0]/2,-self.size[1]/2),
                 Vetor2D(self.size[0]/2, self.size[1]/2),
             )
-        #
-        # def win_to_vp(v: Vetor2D):
-        #     window = self.world_win
-        #     vp_min = viewport.region.min
-        #     width_vp = viewport.width
-        #     height_vp = viewport.height
-        #
-        #     return Vetor2D( vp_min.x +(v.x - window.min.x)/window.width * width_vp,
-        #                    vp_min.y +(1-((v.y - window.min.y)/window.height)) * height_vp)
 
         viewport = self.viewport()
         vp_matrix = viewport_matrix(viewport)
@@ -171,10 +161,6 @@ class MainWindowHandler:
                 print("Objeto Inválido")
         elif response == Gtk.ResponseType.CANCEL:
             print("The Cancel button was clicked")
-
-    # def add_object(self, object: GraphicObject):
-    #     object.update_ndc(self.window)
-    #     self.objs.append(object)
 
     def add_object(self, object: GraphicObject):
         self.object_store.append([object.name, str(f'{type(object).__name__}')])
@@ -208,7 +194,6 @@ class MainWindowHandler:
         }
 
         op, *args = TRANSFORMATIONS[widget.get_name()]
-        print(f'args: {args}')
 
         for object in self.selected_objs():
             if op == 'translate':
@@ -261,18 +246,6 @@ class MainWindowHandler:
         for object in self.view.obj_list:
             object.update_norm_coord(self.view.window)
         self.window.queue_draw()
-
-    # def onClippingMethod(self, widget: Gtk.ComboBoxText):
-    #     METHODS = {
-    #         'Cohen Sutherland': LineClippingMethod.COHEN_SUTHERLAND,
-    #         'Liang Barsky': LineClippingMethod.LIANG_BARSKY,
-    #     }
-    #     self.clipping_method = METHODS[widget.get_active_text()]
-    #     self.window.queue_draw()
-    #
-    # def normalize(self):
-    #     for object in self.display_file:
-    #         object.normalize(self.world_win)
 
 class AppWindow(Gtk.ApplicationWindow):
     def __init__(self, *args, **kwargs):

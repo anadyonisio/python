@@ -51,10 +51,6 @@ class GraphicObject(ABC):
     def transform(self, matrix: np.ndarray):
         self.vertices = [v @ matrix for v in self.vertices]
 
-    # @abstractmethod
-    # def normalize(self, window: Window):
-    #     pass
-
     def update_norm_coord(self, window: 'Window'):
         t_matrix = normalized_matrix(window)
         self.normalized_vertices = [v @ t_matrix for v in self.vertices]
@@ -138,20 +134,6 @@ class Rectangle(GraphicObject):
             self.min + Vetor2D(margin, margin),
             self.max - Vetor2D(margin, margin),
         )
-    # def offset(self, offset: Vetor2D):
-    #     self.min += offset
-    #     self.max += offset
-    #
-    # def rotate(self, angle: float):
-    #     self.min = self.min @ rotation_matrix(angle)
-    #     self.max = self.max @ rotation_matrix(angle)
-    #
-    # def zoom(self, amount: float):
-    #     self.max *= amount
-    #     self.min *= amount
-    #
-    # def center(self) -> Vetor2D:
-    #     return (self.max + self.min) / 2
 
 class Window(Rectangle):
     def __init__(self, min: Vetor2D, max: Vetor2D, angle: float = 0.0):
@@ -167,90 +149,9 @@ class View:
         object.update_norm_coord(self.window)
         self.obj_list.append(object)
 
-    # def remove_objects(self, indexes: Iterable[int]):
-    #     for i in reversed(indexes):
-    #         self.objs.pop(i)
-    #
-    # def translate_window(self, offset: Vec2):
-    #     self.window.translate(offset)
-    #     self.update_ndc()
-    #
-    # def zoom_window(self, factor: float):
-    #     self.window.scale(Vec2(factor, factor))
-    #     self.update_ndc()
-    #
-    # def rotate_window(self):
-    #     pass
-    #     self.update_ndc()
-
     def update_norm_coord(self):
         for obj in self.obj_list:
             obj.update_ndc(self.window)
-
-    # @classmethod
-    # def load(self, path: str):
-    #     with open(path) as file:
-    #         contents = file.read()
-    #         return ObjCodec.decode(contents)
-    #
-    # def save(self, path: str):
-    #     with open(path, 'w+') as file:
-    #         contents = ObjCodec.encode(self)
-    #         file.write(contents)
-    #
-    # def clip_objects(self):
-    #     pass
-
-# @dataclass
-# class Viewport:
-#     region: Rectangle
-#     window: Window
-#
-#     @property
-#     def min(self) -> float:
-#         return self.region.min
-#
-#     @property
-#     def max(self) -> float:
-#         return self.region.max
-#
-#     @property
-#     def width(self) -> float:
-#         return self.region.width
-#
-#     @property
-#     def height(self) -> float:
-#         return self.region.height
-#
-#     def transform(self, p: Vetor2D) -> Vetor2D:
-#         if not isinstance(p, Vetor2D):
-#             p = Vetor2D(p[0], p[1])
-#
-#         view_size = Vetor2D(self.max.x - self.min.x, self.max.y - self.min.y)
-#
-#         win_size = Vetor2D(self.window.max.x - self.window.min.x,
-#                            self.window.max.y - self.window.min.y
-#                            )
-#         return Vetor2D((p.x - self.min.x) * view_size.x / win_size.x,
-#                        (p.y - self.min.y) * view_size.y / win_size.y
-#                        )
-#
-#     def draw(self, cr: Context):
-#         _min = self.min
-#         _max = self.max
-#
-#         cr.set_source_rgb(0.4, 0.4, 0.4)
-#         cr.move_to(_min.x, _min.y)
-#         for x, y in [
-#                 (_max.x, _min.y),
-#                 (_max.x, _max.y),
-#                 (_min.x, _max.y),
-#                 (_min.x, _min.y),
-#         ]:
-#             cr.line_to(x, y)
-#             cr.move_to(x, y)
-#         cr.stroke()
-
 
 class Point(GraphicObject):
     def __init__(self, posicao: Vetor2D, name=''):
@@ -269,18 +170,6 @@ class Point(GraphicObject):
         cr.move_to(posicao_vp.x, posicao_vp.y)
         cr.arc(posicao_vp.x, posicao_vp.y, 1, 0, 2 * np.pi)
         cr.fill()
-
-    # @property
-    # def centroid(self):
-    #     return self.posicao
-    #
-    # def transform(self, matrix: np.ndarray):
-    #     print(f'posição: {self.posicao}')
-    #     print(f'matrix: {matrix}')
-    #     self.posicao = self.posicao @ matrix
-
-    # def normalize(self, window: Window):
-    #     self.normalized = self.posicao
 
     def clipped(self, *args, **kwargs) -> Optional['Point']:
         posicao = self.normalized_vertices[0]
@@ -320,20 +209,6 @@ class Line(GraphicObject):
         cr.move_to(inicio_vp.x, inicio_vp.y)
         cr.line_to(fim_vp.x, fim_vp.y)
         cr.stroke()
-    #
-    # @property
-    # def centroid(self):
-    #     return (self.inicio + self.fim) / 2
-    #
-    # def transform(self, matrix: np.ndarray):
-    #     print(f'inicio: {self.inicio}')
-    #     print(f'fim: {self.fim}')
-    #     print(f'matriz: {matrix}')
-    #     self.inicio = self.inicio @ matrix
-    #     self.fim =  self.fim @ matrix
-    #
-    # def normalize(self, window: Window):
-    #     self.normalized = [self.inicio, self.fim]
 
     def clipped(self, method: 'LineClippingMethod') -> Optional[GraphicObject]:
 
@@ -342,34 +217,23 @@ class Line(GraphicObject):
 
 
 class Polygon(GraphicObject):
-    def __init__(self, vertices, name=''):
+    def __init__(self, vertices, name='', filled=False):
         super().__init__(vertices=vertices, name=name)
-        # self.normalized = self.vertices
-
+        self.filled = filled
     def draw(self, cr: cairo.Context,vp_matrix: np.ndarray):
-        # if not self.normalized:
-        #     return
 
         for i in range(len(self.normalized_vertices)):
             proximo_vp = self.normalized_vertices[i] @ vp_matrix
             cr.line_to(proximo_vp.x, proximo_vp.y)
         cr.close_path()
-        cr.stroke()
-
-    def clipped(self, method=None) -> Optional['GraphicObject']:
-        return self
-
-
-    # @property
-    # def centroid(self):
-    #     center = np.sum(self.vertices, 0) / len(self.vertices)
-    #     return Vetor2D(center[0], center[1])
-    #
-    # def transform(self, matrix: np.ndarray):
-    #     for i, vertex in enumerate(self.vertices):
-    #         self.vertices[i] = vertex @ matrix
-    #
-    # def normalize(self, window: Window):
-    #     self.normalized = self.vertices
+        if self.filled:
+            cr.stroke_preserve()
+            cr.fill()
+        else:
+            cr.stroke()
 
 
+    def clipped(self, *args, **kwargs) -> Optional['Polygon']:
+        from clipping import poly_clipping
+
+        return poly_clipping(self)

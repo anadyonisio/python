@@ -2,7 +2,7 @@ from enum import auto, Enum
 from typing import List, Optional
 import copy
 
-from drawable import Line, Vetor2D
+from drawable import Line, Vetor2D, Polygon
 
 class LineClippingMethod(Enum):
     COHEN_SUTHERLAND = auto()
@@ -73,68 +73,69 @@ def cohen_sutherland_line_clip(line: Line) -> Line:
             new_line.normalized_vertices[1] = fim
             regions[1] = CohenRegion.region(fim)
 
-#
-# def liang_barsky_line_clip(line: Line) -> Optional[Line]:
-#     inicio, fim = line.vertices_ndc
-#
-#     p1 = inicio.x - fim.x
-#     p2 = -p1
-#     p3 = inicio.y - fim.y
-#     p4 = -p3
-#
-#     q1 = inicio.x - (-1)
-#     q2 = 1 - inicio.x
-#     q3 = inicio.y - (-1)
-#     q4 = 1 - inicio.y
-#
-#     posarr = [1 for _ in range(5)]
-#     negarr = [0 for _ in range(5)]
-#
-#     if (p1 == 0 and q1 < 0
-#        or p3 == 0 and q3 < 0):
-#         return
-#
-#     if p1 != 0:
-#         r1 = q1 / p1
-#         r2 = q2 / p2
-#
-#         if p1 < 0:
-#             negarr.append(r1)
-#             posarr.append(r2)
-#         else:
-#             negarr.append(r2)
-#             posarr.append(r1)
-#
-#     if p3 != 0:
-#         r3 = q3 / p3
-#         r4 = q4 / p4
-#
-#         if p3 < 0:
-#             negarr.append(r3)
-#             posarr.append(r4)
-#         else:
-#             negarr.append(r4)
-#             posarr.append(r3)
-#
-#     rn1 = max(negarr)
-#     rn2 = min(posarr)
-#
-#     if rn1 > rn2:
-#         return
-#
-#     xn1 = inicio.x + p2 * rn1
-#     yn1 = inicio.y + p4 * rn1
-#
-#     xn2 = inicio.x + p2 * rn2
-#     yn2 = inicio.y + p4 * rn2
-#
-#     new_line = copy.deepcopy(line)
-#     new_line.vertices_ndc = [Vetor2D(xn1, yn1), Vetor2D(xn2, yn2)]
-#     return new_line
-#
-
 def line_clip(line: Line, method=LineClippingMethod.COHEN_SUTHERLAND) -> Optional[Line]:
     METHODS = {
         LineClippingMethod.COHEN_SUTHERLAND: cohen_sutherland_line_clip
     }
     return METHODS[method](line)
+
+def poly_iter(vertices: List[Vetor2D]):
+    if not vertices:
+        return
+    v1 = vertices[0]
+    for v2 in vertices[1:]:
+        yield v1, v2
+        v1 = v2
+    yield v1, vertices[0]
+
+def poly_clipping(poly: Polygon) -> Optional[Polygon]:
+    new_poly = copy.deepcopy(poly)
+
+    def clip_region(vertices, clipping_region):
+        clipped = []
+        for v1, v2 in poly_iter(vertices):
+            regions = [ CohenRegion.region(v) & clipping_region for v in [v1, v2]]
+
+            if all([region != clipping_region for region in regions]):
+                clipped.extend([v1, v2])
+            elif all([region == clipping_region for region in regions]):
+                continue
+            elif any([region == clipping_region for region in regions]):
+                clip_index = 0 if regions[0] == clipping_region else 1
+
+                dx, dy, _ = v2 - v1
+                m = dx / dy
+
+                if clipping_region == CohenRegion.TOP:
+                    x = v1.x + m * (1 - v1.y)
+                    y = 1
+                elif clipping_region == CohenRegion.BOTTOM:
+                    x = v1.x + m * (-1 - v1.y)
+                    y = -1
+                elif clipping_region == CohenRegion.RIGHT:
+                    x = 1
+                    y = v1.y + (1 - v1.x) / m
+                elif clipping_region == CohenRegion.LEFT:
+                    x = -1
+                    y = v1.y + (-1 - v1.x) / m
+
+                if clip_index == 0:
+                    v1 = Vetor2D(x, y)
+                else:
+                    v2 = Vetor2D(x, y)
+                clipped.extend([v1, v2])
+        return clipped
+
+    regions = [
+        CohenRegion.LEFT,
+        CohenRegion.TOP,
+        CohenRegion.RIGHT,
+        CohenRegion.BOTTOM
+    ]
+    for region in regions:
+        new_poly.normalized_vertices = clip_region(
+            new_poly.normalized_vertices,
+            region
+        )
+
+    return new_poly
