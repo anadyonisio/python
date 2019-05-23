@@ -16,13 +16,15 @@ from drawable import (
     Polygon,
     Rectangle,
     Window,
-    View
+    View,
+    Curve
 )
 
 OBJECT_TYPES = {
     0: "point",
     1: "line",
-    2: "polygon"
+    2: "polygon",
+    3: "curve",
     }
 
 EVENTS = {
@@ -76,14 +78,32 @@ class NewObjectWindowHandler:
             if len(self.vertices) >= 3:
                 filled = self.builder.get_object('switch_filled').get_active()
                 self.dialog.new_object = Polygon(self.vertices, name=name, filled=filled )
+
+        elif OBJECT_TYPES[page_number] == "curve":
+            print("Curva")
+            if self.builder.get_object('btn_bezier').get_active():
+                type = 'bezier'
+            elif self.builder.get_object('btn_bspline').get_active():
+                type = 'bspline'
+
+            if len(self.vertices) >= 4:
+                self.dialog.new_object = Curve.control_point(self.vertices, type=type, name=name)
         else:
             print("Invalid Page")
             raise ValueError('No page with given index.')
         window.destroy()
 
     def onAddPoint(self, widget):
-        x = float(entry_text(self, 'entry_x3'))
-        y = float(entry_text(self, 'entry_y3'))
+        notebook = self.builder.get_object("notebook1")
+        page_number = notebook.get_current_page()
+
+        if OBJECT_TYPES[page_number] == "polygon":
+            x = float(entry_text(self, 'entry_x3'))
+            y = float(entry_text(self, 'entry_y3'))
+        elif OBJECT_TYPES[page_number] == "curve":
+            x = float(entry_text(self, "entry_x4"))
+            y = float(entry_text(self, "entry_y4"))
+
         self.vertices.append(Vetor2D(x, y))
 
         print(f'Ponto Adicionado: {x}, {y}')
@@ -107,7 +127,6 @@ class MainWindowHandler:
         self.window = self.builder.get_object("main_window")
         self.object_store = self.builder.get_object("object_store")
         self.view = View()
-        self.world_win = None
         self.press_start = None
         self.size = []
         self.rotation_ref = RotationRef.CENTER
@@ -152,7 +171,7 @@ class MainWindowHandler:
         response = dialog.dialog_window.run()
 
         if response == Gtk.ResponseType.OK:
-            print("The OK button was clicked")
+            #print("The OK button was clicked")
             if dialog.new_object is not None:
                 self.view.add_object(dialog.new_object)
                 self.add_object(dialog.new_object)

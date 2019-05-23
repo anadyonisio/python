@@ -186,7 +186,6 @@ class Point(GraphicObject):
 class Line(GraphicObject):
     def __init__(self, inicio: Vetor2D, fim: Vetor2D, name=''):
         super().__init__(vertices=[inicio, fim], name=name)
-        #self.normalize(Window(min=Vetor2D(), max=Vetor2D()))
 
     @property
     def inicio(self):
@@ -211,7 +210,6 @@ class Line(GraphicObject):
         cr.stroke()
 
     def clipped(self, method: 'LineClippingMethod') -> Optional[GraphicObject]:
-
         from clipping import line_clip
         return line_clip(self, method)
 
@@ -231,9 +229,100 @@ class Polygon(GraphicObject):
             cr.fill()
         else:
             cr.stroke()
-
-
     def clipped(self, *args, **kwargs) -> Optional['Polygon']:
         from clipping import poly_clipping
 
         return poly_clipping(self)
+
+class Curve(GraphicObject):
+    def __init__(self, vertices, name=''):
+        super().__init__(vertices=vertices, name=name)
+
+    @classmethod
+    def control_point(cls, control_points, type="bezier", name = '', n_points=20):
+        proj_x = np.array([v.x for v in control_points], dtype=float)
+        proj_y = np.array([v.y for v in control_points], dtype=float)
+        vertices = []
+
+        if type == "bezier":
+            for i in range(0, len(control_points) -1, 3):
+                for t in np.linspace(0, 1, n_points):
+                    # matriz linha dos parâmetros
+                    T = np.array([t**3, t**2, t, 1], dtype=float)
+                    M = T @ cls.bezier_matrix()
+                    # Blending Functions
+                    x = M @ proj_x[i:i+4]
+                    y = M @ proj_y[i:i+4]
+                    vertices.append(Vetor2D(x, y))
+        elif type == "bspline":
+            for i in range(0, len(control_points) -3):
+                # Vetor de Geometria B-Spline
+                Gbs_x = proj_x[i:i+4]
+                Gbs_y = proj_y[i:i+4]
+                # Coeficientes
+                Cx = cls.bspline_matrix() @ Gbs_x
+                Cy = cls.bspline_matrix() @ Gbs_y
+                # Condições iniciais
+                Dx = cls.fd_matrix(1.0 / n_points) @ Cx
+                Dy = cls.fd_matrix(1.0 / n_points) @ Cy
+
+                for k in range(n_points+1):
+                    x = Dx[0]
+                    y = Dy[0]
+
+                    Dx = Dx + np.append(Dx[1:], 0)
+                    Dy = Dy + np.append(Dy[1:], 0)
+
+                    vertices.append(Vetor2D(x, y))
+        return cls(vertices, name=name)
+
+    @classmethod
+    # produto da matriz de Hermite pela
+    # matriz de compatibilidade de Hermite para Bezier
+    def bezier_matrix(cls):
+        return np.array(
+            [
+                -1, 3, -3, 1,
+                3, -6, 3, 0,
+                -3, 3, 0, 0,
+                1, 0, 0, 0
+            ],
+            dtype=float
+        ).reshape(4, 4)
+
+    @classmethod
+    def bspline_matrix(cls):
+        return np.array(
+            [
+                -1, 3, -3, 1,
+                3, -6, 3, 0,
+                -3, 0, 3, 0,
+                1, 4, 1, 0
+            ],
+            dtype=float
+        ).reshape(4, 4) / 6
+
+    @classmethod
+    # Forward Difference
+    def fd_matrix(cls, delta):
+        return np.array(
+            [
+                0, 0, 0, 1,
+                delta**3, delta**2, delta, 0,
+                6*delta**3, 2*delta**2, 0, 0,
+                6*delta**3, 0, 0, 0,
+            ],
+            dtype=float
+        ).reshape(4, 4)
+
+    def draw(self, cr: cairo.Context, vp_matrix: np.ndarray):
+        for i in range(len(self.normalized_vertices)):
+            proximo_vp = self.normalized_vertices[i] @ vp_matrix
+            cr.line_to(proximo_vp.x, proximo_vp.y)
+        cr.stroke()
+
+    def clipped(self, *args, **kwargs):
+        from clipping import curve_clipping
+
+        return curve_clipping(self)
+

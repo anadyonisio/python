@@ -29,10 +29,9 @@ class CohenRegion:
 
         return region
 
-
 def cohen_sutherland_line_clip(line: Line) -> Line:
-    new_line = copy.deepcopy(line)
-    inicio, fim = new_line.normalized_vertices
+    nova_linha = copy.deepcopy(line)
+    inicio, fim = nova_linha.normalized_vertices
     regions = [
         CohenRegion.region(v)
         for v in (inicio, fim)
@@ -41,7 +40,7 @@ def cohen_sutherland_line_clip(line: Line) -> Line:
     while True:
         # dois pontos dentro
         if all([r == CohenRegion.INSIDE for r in regions]):
-            return new_line
+            return nova_linha
         # dois pontos fora
         elif regions[0] & regions[1] != 0:
             return
@@ -66,11 +65,11 @@ def cohen_sutherland_line_clip(line: Line) -> Line:
 
         if clip_index == 0:
             inicio = Vetor2D(x, y)
-            new_line.normalized_vertices[0] = inicio
+            nova_linha.normalized_vertices[0] = inicio
             regions[0] = CohenRegion.region(inicio)
         else:
             fim = Vetor2D(x, y)
-            new_line.normalized_vertices[1] = fim
+            nova_linha.normalized_vertices[1] = fim
             regions[1] = CohenRegion.region(fim)
 
 def line_clip(line: Line, method=LineClippingMethod.COHEN_SUTHERLAND) -> Optional[Line]:
@@ -89,7 +88,7 @@ def poly_iter(vertices: List[Vetor2D]):
     yield v1, vertices[0]
 
 def poly_clipping(poly: Polygon) -> Optional[Polygon]:
-    new_poly = copy.deepcopy(poly)
+    novo_poligono = copy.deepcopy(poly)
 
     def clip_region(vertices, clipping_region):
         clipped = []
@@ -133,9 +132,65 @@ def poly_clipping(poly: Polygon) -> Optional[Polygon]:
         CohenRegion.BOTTOM
     ]
     for region in regions:
-        new_poly.normalized_vertices = clip_region(
-            new_poly.normalized_vertices,
+        novo_poligono.normalized_vertices = clip_region(
+            novo_poligono.normalized_vertices,
+            region
+        )
+    return novo_poligono
+
+def curve_clipping(curve):
+    nova_curva = copy.deepcopy(curve)
+
+    def clip_region(vertices, clipping_region):
+        clipped = []
+        for i in range(len(vertices) - 1):
+            v1 = vertices[i]
+            v2 = vertices[i + 1]
+
+            regions = [
+                CohenRegion.region(v) & clipping_region for v in [v1, v2]
+            ]
+
+            if all([region != clipping_region for region in regions]):
+                clipped.extend([v1, v2])
+            elif all([region == clipping_region for region in regions]):
+                continue
+            elif any([region == clipping_region for region in regions]):
+                clip_index = 0 if regions[0] == clipping_region else 1
+
+                dx, dy, _ = v2 - v1
+                m = dx / dy
+
+                if clipping_region == CohenRegion.TOP:
+                    x = v1.x + m * (1 - v1.y)
+                    y = 1
+                elif clipping_region == CohenRegion.BOTTOM:
+                    x = v1.x + m * (-1 - v1.y)
+                    y = -1
+                elif clipping_region == CohenRegion.RIGHT:
+                    x = 1
+                    y = v1.y + (1 - v1.x) / m
+                elif clipping_region == CohenRegion.LEFT:
+                    x = -1
+                    y = v1.y + (-1 - v1.x) / m
+
+                if clip_index == 0:
+                    v1 = Vetor2D(x, y)
+                else:
+                    v2 = Vetor2D(x, y)
+                clipped.extend([v1, v2])
+        return clipped
+
+    regions = [
+        CohenRegion.LEFT,
+        CohenRegion.TOP,
+        CohenRegion.RIGHT,
+        CohenRegion.BOTTOM
+    ]
+    for region in regions:
+        nova_curva.normalized_vertices = clip_region(
+            nova_curva.normalized_vertices,
             region
         )
 
-    return new_poly
+    return nova_curva
